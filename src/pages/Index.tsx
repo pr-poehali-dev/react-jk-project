@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -6,6 +6,9 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Icon from '@/components/ui/icon';
+import AuthModal from '@/components/AuthModal';
+import { Toaster } from '@/components/ui/toaster';
+import { useToast } from '@/hooks/use-toast';
 
 const Index = () => {
   const [apartmentPrice, setApartmentPrice] = useState(5000000);
@@ -14,6 +17,73 @@ const Index = () => {
   const [interestRate] = useState(12);
   
   const [selectedRooms, setSelectedRooms] = useState<string>('all');
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [apartments, setApartments] = useState<any[]>([]);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem('user');
+    const savedToken = localStorage.getItem('token');
+    if (savedUser && savedToken) {
+      setUser(JSON.parse(savedUser));
+      setToken(savedToken);
+    }
+    loadApartments();
+  }, []);
+
+  const loadApartments = async () => {
+    try {
+      const response = await fetch('https://functions.poehali.dev/883f51fe-241d-4634-843e-b53ff4c31701');
+      const data = await response.json();
+      setApartments(data);
+    } catch (error) {
+      console.error('Error loading apartments:', error);
+    }
+  };
+
+  const handleAuthSuccess = (userData: any, userToken: string) => {
+    setUser(userData);
+    setToken(userToken);
+    localStorage.setItem('user', JSON.stringify(userData));
+    localStorage.setItem('token', userToken);
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    setToken(null);
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    toast({ title: 'Выход выполнен' });
+  };
+
+  const handleBooking = async (apartmentId: number) => {
+    if (!token) {
+      setAuthModalOpen(true);
+      return;
+    }
+
+    try {
+      const response = await fetch('https://functions.poehali.dev/883f51fe-241d-4634-843e-b53ff4c31701', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Auth-Token': token
+        },
+        body: JSON.stringify({ apartment_id: apartmentId })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        toast({ title: 'Успешно!', description: 'Заявка на просмотр отправлена' });
+      } else {
+        toast({ title: 'Ошибка', description: data.error, variant: 'destructive' });
+      }
+    } catch (error) {
+      toast({ title: 'Ошибка', description: 'Не удалось отправить заявку', variant: 'destructive' });
+    }
+  };
 
   const calculateMortgage = () => {
     const loanAmount = apartmentPrice - (apartmentPrice * initialPayment) / 100;
@@ -25,14 +95,7 @@ const Index = () => {
     return Math.round(monthlyPayment);
   };
 
-  const apartments = [
-    { id: 1, rooms: 1, area: 38, floor: 5, price: 4200000, image: 'https://cdn.poehali.dev/projects/db055318-b76f-41d8-8795-d71780223041/files/ba087084-4722-4833-9db9-b62f689d41e6.jpg' },
-    { id: 2, rooms: 2, area: 52, floor: 8, price: 5800000, image: 'https://cdn.poehali.dev/projects/db055318-b76f-41d8-8795-d71780223041/files/ba087084-4722-4833-9db9-b62f689d41e6.jpg' },
-    { id: 3, rooms: 2, area: 58, floor: 12, price: 6400000, image: 'https://cdn.poehali.dev/projects/db055318-b76f-41d8-8795-d71780223041/files/ba087084-4722-4833-9db9-b62f689d41e6.jpg' },
-    { id: 4, rooms: 3, area: 72, floor: 10, price: 7900000, image: 'https://cdn.poehali.dev/projects/db055318-b76f-41d8-8795-d71780223041/files/ba087084-4722-4833-9db9-b62f689d41e6.jpg' },
-    { id: 5, rooms: 3, area: 85, floor: 15, price: 9200000, image: 'https://cdn.poehali.dev/projects/db055318-b76f-41d8-8795-d71780223041/files/ba087084-4722-4833-9db9-b62f689d41e6.jpg' },
-    { id: 6, rooms: 4, area: 105, floor: 18, price: 11500000, image: 'https://cdn.poehali.dev/projects/db055318-b76f-41d8-8795-d71780223041/files/ba087084-4722-4833-9db9-b62f689d41e6.jpg' },
-  ];
+
 
   const filteredApartments = selectedRooms === 'all' 
     ? apartments 
@@ -63,10 +126,22 @@ const Index = () => {
             <a href="#calculator" className="hover:text-primary transition-colors">Калькулятор</a>
             <a href="#contacts" className="hover:text-primary transition-colors">Контакты</a>
           </div>
-          <Button className="bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity">
-            <Icon name="Phone" className="mr-2" size={16} />
-            Позвонить
-          </Button>
+          <div className="flex gap-3 items-center">
+            {user ? (
+              <>
+                <span className="text-sm font-medium">Привет, {user.full_name}!</span>
+                <Button variant="outline" size="sm" onClick={handleLogout}>
+                  <Icon name="LogOut" className="mr-2" size={14} />
+                  Выход
+                </Button>
+              </>
+            ) : (
+              <Button onClick={() => setAuthModalOpen(true)} className="bg-gradient-to-r from-primary to-secondary hover:opacity-90">
+                <Icon name="User" className="mr-2" size={16} />
+                Войти
+              </Button>
+            )}
+          </div>
         </div>
       </nav>
 
@@ -192,8 +267,12 @@ const Index = () => {
                       <div className="text-sm text-muted-foreground">{apt.floor} этаж</div>
                     </div>
                   </div>
-                  <Button className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90">
-                    Подробнее
+                  <Button 
+                    onClick={() => handleBooking(apt.id)}
+                    className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90"
+                  >
+                    <Icon name="Calendar" className="mr-2" size={16} />
+                    Записаться на просмотр
                   </Button>
                 </CardContent>
               </Card>
@@ -405,6 +484,13 @@ const Index = () => {
           </div>
         </div>
       </footer>
+      
+      <AuthModal 
+        open={authModalOpen} 
+        onOpenChange={setAuthModalOpen}
+        onSuccess={handleAuthSuccess}
+      />
+      <Toaster />
     </div>
   );
 };

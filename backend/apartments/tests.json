@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "name": "Get all apartments",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": [
+        {
+          "id": "number",
+          "rooms": "number",
+          "area": "number",
+          "floor": "number",
+          "price": "number",
+          "image": "string",
+          "status": "string"
+        }
+      ],
+      "bodyMatcher": "partial"
+    }
+  ]
+}
